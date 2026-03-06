@@ -1,5 +1,5 @@
 name: 'Labeler'
-description: 'Automatically label new pull requests based on the paths of files being changed'
+description: 'Automatically label pull requests based on changed files, branch names, commit messages, commit authors, and commit count'
 author: 'GitHub'
 inputs:
   repo-token:
@@ -30,3 +30,6 @@ outputs:
 runs:
   using: 'node24'
   main: 'dist/index.js'
+branding:
+  icon: 'tag'
+  color: 'blue'

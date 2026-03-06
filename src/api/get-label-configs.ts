@@ -11,14 +11,25 @@ import {
 
 import {toBranchMatchConfig, BranchMatchConfig} from '../branch';
 
+import {toCommitMatchConfig, CommitMatchConfig} from '../commit';
+
 export interface MatchConfig {
   all?: BaseMatchConfig[];
   any?: BaseMatchConfig[];
 }
 
-export type BaseMatchConfig = BranchMatchConfig & ChangedFilesMatchConfig;
+export type BaseMatchConfig = BranchMatchConfig &
+  ChangedFilesMatchConfig &
+  CommitMatchConfig;
 
-const ALLOWED_CONFIG_KEYS = ['changed-files', 'head-branch', 'base-branch'];
+const ALLOWED_CONFIG_KEYS = [
+  'changed-files',
+  'head-branch',
+  'base-branch',
+  'commit-message',
+  'commit-author',
+  'commit-count'
+];
 
 export const getLabelConfigs = (
   client: ClientType,
@@ -118,9 +129,11 @@ export function getLabelConfigMapFromObject(
 export function toMatchConfig(config: any): BaseMatchConfig {
   const changedFilesConfig = toChangedFilesMatchConfig(config);
   const branchConfig = toBranchMatchConfig(config);
+  const commitConfig = toCommitMatchConfig(config);
 
   return {
     ...changedFilesConfig,
-    ...branchConfig
+    ...branchConfig,
+    ...commitConfig
   };
 }

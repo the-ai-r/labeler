@@ -1,6 +1,8 @@
 import * as core from '@actions/core';
 import * as github from '@actions/github';
 import {getChangedFiles} from './get-changed-files';
+import {getCommits} from './get-commits';
+import {CommitInfo} from '../commit';
 import {ClientType} from './types';
 
 export async function* getPullRequests(
@@ -29,10 +31,14 @@ export async function* getPullRequests(
       continue;
     }
 
+    core.debug(`fetching commits for pr #${prNumber}`);
+    const commits: CommitInfo[] = await getCommits(client, prNumber);
+
     yield {
       data: prData,
       number: prNumber,
-      changedFiles
+      changedFiles,
+      commits
     };
   }
 }

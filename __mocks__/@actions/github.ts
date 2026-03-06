@@ -31,6 +31,11 @@ const mockApi = {
         endpoint: {
           merge: jest.fn().mockReturnValue({})
         }
+      },
+      listCommits: {
+        endpoint: {
+          merge: jest.fn().mockReturnValue({})
+        }
       }
     },
     repos: {

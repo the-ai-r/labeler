@@ -89,6 +89,40 @@ describe('toMatchConfig', () => {
       });
     });
   });
+
+  describe('when commit config options are present', () => {
+    const config = {
+      'commit-message': ['^feat:'],
+      'commit-author': ['^dependabot'],
+      'commit-count': {'min-count': 5}
+    };
+    const expected: BaseMatchConfig = {
+      commitMessage: ['^feat:'],
+      commitAuthor: ['^dependabot'],
+      commitCount: [{minCount: 5, maxCount: undefined}]
+    };
+
+    it('returns a MatchConfig object with commit options', () => {
+      const result = toMatchConfig(config);
+      expect(result).toEqual(expected);
+    });
+  });
+
+  describe('when commit and branch config options are combined', () => {
+    const config = {
+      'commit-message': ['^feat:'],
+      'head-branch': ['main']
+    };
+
+    it('returns a MatchConfig with both commit and branch options', () => {
+      const result = toMatchConfig(config);
+      expect(result).toEqual({
+        commitMessage: ['^feat:'],
+        headBranch: ['main'],
+        baseBranch: undefined
+      });
+    });
+  });
 });
 
 describe('checkMatchConfigs', () => {
@@ -159,6 +193,66 @@ describe('checkMatchConfigs', () => {
         {any: [{headBranch: ['head-branch']}]}
       ];
       const result = checkMatchConfigs(changedFiles, matchConfig, false);
+      expect(result).toBe(true);
+    });
+  });
+
+  describe('with commit matchers', () => {
+    const commits = [
+      {message: 'feat: add feature', author: 'developer'},
+      {message: 'fix: bug fix', author: 'dependabot[bot]'}
+    ];
+
+    it('returns true when commit-message pattern matches', () => {
+      const matchConfig: MatchConfig[] = [
+        {any: [{commitMessage: ['^feat:']}]}
+      ];
+      const result = checkMatchConfigs([], matchConfig, false, commits);
+      expect(result).toBe(true);
+    });
+
+    it('returns false when commit-message pattern does not match', () => {
+      const matchConfig: MatchConfig[] = [
+        {any: [{commitMessage: ['^chore:']}]}
+      ];
+      const result = checkMatchConfigs([], matchConfig, false, commits);
+      expect(result).toBe(false);
+    });
+
+    it('returns true when commit-author pattern matches', () => {
+      const matchConfig: MatchConfig[] = [
+        {any: [{commitAuthor: ['^dependabot']}]}
+      ];
+      const result = checkMatchConfigs([], matchConfig, false, commits);
+      expect(result).toBe(true);
+    });
+
+    it('returns true when commit-count matches', () => {
+      const matchConfig: MatchConfig[] = [
+        {any: [{commitCount: [{minCount: 1, maxCount: 5}]}]}
+      ];
+      const result = checkMatchConfigs([], matchConfig, false, commits);
+      expect(result).toBe(true);
+    });
+
+    it('returns false when commit-count does not match', () => {
+      const matchConfig: MatchConfig[] = [
+        {any: [{commitCount: [{minCount: 10}]}]}
+      ];
+      const result = checkMatchConfigs([], matchConfig, false, commits);
+      expect(result).toBe(false);
+    });
+
+    it('works with all matcher for commits', () => {
+      const matchConfig: MatchConfig[] = [
+        {
+          all: [
+            {commitMessage: ['^feat:', '^fix:']},
+            {commitAuthor: ['^developer', '^dependabot']}
+          ]
+        }
+      ];
+      const result = checkMatchConfigs([], matchConfig, false, commits);
       expect(result).toBe(true);
     });
   });

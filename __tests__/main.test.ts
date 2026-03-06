@@ -37,7 +37,8 @@ const yamlFixtures = {
   'branches.yml': fs.readFileSync('__tests__/fixtures/branches.yml'),
   'only_pdfs.yml': fs.readFileSync('__tests__/fixtures/only_pdfs.yml'),
   'not_supported.yml': fs.readFileSync('__tests__/fixtures/not_supported.yml'),
-  'any_and_all.yml': fs.readFileSync('__tests__/fixtures/any_and_all.yml')
+  'any_and_all.yml': fs.readFileSync('__tests__/fixtures/any_and_all.yml'),
+  'commits.yml': fs.readFileSync('__tests__/fixtures/commits.yml')
 };
 
 const configureInput = (
@@ -431,6 +432,76 @@ describe('run', () => {
     );
   });
 
+  it('adds labels based on commit message patterns', async () => {
+    configureInput({});
+    usingLabelerConfigYaml('commits.yml');
+    mockGitHubResponseChangedFilesAndCommits(
+      ['foo.txt'],
+      [
+        {message: 'feat: add new feature', author: 'developer'},
+        {message: 'fix: resolve bug', author: 'developer'}
+      ]
+    );
+    getPullMock.mockResolvedValue(<any>{
+      data: {labels: []}
+    });
+
+    await run();
+
+    expect(setLabelsMock).toHaveBeenCalledTimes(1);
+    expect(setLabelsMock).toHaveBeenCalledWith({
+      owner: 'monalisa',
+      repo: 'helloworld',
+      issue_number: 123,
+      labels: ['feature', 'small-pr']
+    });
+  });
+
+  it('adds labels based on commit author patterns', async () => {
+    configureInput({});
+    usingLabelerConfigYaml('commits.yml');
+    mockGitHubResponseChangedFilesAndCommits(
+      ['foo.txt'],
+      [{message: 'chore: update deps', author: 'dependabot[bot]'}]
+    );
+    getPullMock.mockResolvedValue(<any>{
+      data: {labels: []}
+    });
+
+    await run();
+
+    expect(setLabelsMock).toHaveBeenCalledTimes(1);
+    expect(setLabelsMock).toHaveBeenCalledWith({
+      owner: 'monalisa',
+      repo: 'helloworld',
+      issue_number: 123,
+      labels: ['bot-pr', 'small-pr']
+    });
+  });
+
+  it('adds labels based on commit count', async () => {
+    configureInput({});
+    usingLabelerConfigYaml('commits.yml');
+    const commits = Array.from({length: 12}, (_, i) => ({
+      message: `commit ${i}`,
+      author: 'developer'
+    }));
+    mockGitHubResponseChangedFilesAndCommits(['foo.txt'], commits);
+    getPullMock.mockResolvedValue(<any>{
+      data: {labels: []}
+    });
+
+    await run();
+
+    expect(setLabelsMock).toHaveBeenCalledTimes(1);
+    expect(setLabelsMock).toHaveBeenCalledWith({
+      owner: 'monalisa',
+      repo: 'helloworld',
+      issue_number: 123,
+      labels: ['large-pr']
+    });
+  });
+
   it('does not add labels to PRs that have no changed files', async () => {
     usingLabelerConfigYaml('only_pdfs.yml');
     mockGitHubResponseChangedFiles();
@@ -504,5 +575,23 @@ function usingLabelerConfigYaml(fixtureName: keyof typeof yamlFixtures): void {
 
 function mockGitHubResponseChangedFiles(...files: string[]): void {
   const returnValue = files.map(f => ({filename: f}));
+  // paginate is called twice per PR: once for files, once for commits
+  // Use mockReturnValue so both calls return file data; commit extraction
+  // will gracefully produce empty CommitInfo objects for file data.
   paginateMock.mockReturnValue(<any>returnValue);
+}
+
+function mockGitHubResponseChangedFilesAndCommits(
+  files: string[],
+  commits: Array<{message: string; author: string}>
+): void {
+  const filesReturnValue = files.map(f => ({filename: f}));
+  const commitsReturnValue = commits.map(c => ({
+    commit: {message: c.message, author: {name: c.author}},
+    author: {login: c.author}
+  }));
+  // First paginate call = files, second = commits
+  paginateMock
+    .mockReturnValueOnce(<any>filesReturnValue)
+    .mockReturnValueOnce(<any>commitsReturnValue);
 }

@@ -11,6 +11,16 @@ import {checkAllChangedFiles, checkAnyChangedFiles} from './changedFiles';
 
 import {checkAnyBranch, checkAllBranch} from './branch';
 
+import {
+  CommitInfo,
+  checkAnyCommitMessage,
+  checkAllCommitMessage,
+  checkAnyCommitAuthor,
+  checkAllCommitAuthor,
+  checkAnyCommitCount,
+  checkAllCommitCount
+} from './commit';
+
 type ClientType = ReturnType<typeof github.getOctokit>;
 
 // GitHub Issues cannot have more than 100 labels
@@ -44,7 +54,14 @@ export async function labeler() {
 
     for (const [label, configs] of labelConfigs.entries()) {
       core.debug(`processing ${label}`);
-      if (checkMatchConfigs(pullRequest.changedFiles, configs, dot)) {
+      if (
+        checkMatchConfigs(
+          pullRequest.changedFiles,
+          configs,
+          dot,
+          pullRequest.commits
+        )
+      ) {
         allLabels.add(label);
       } else if (syncLabels) {
         allLabels.delete(label);
@@ -131,11 +148,12 @@ export async function labeler() {
 export function checkMatchConfigs(
   changedFiles: string[],
   matchConfigs: MatchConfig[],
-  dot: boolean
+  dot: boolean,
+  commits: CommitInfo[] = []
 ): boolean {
   for (const config of matchConfigs) {
     core.debug(` checking config ${JSON.stringify(config)}`);
-    if (!checkMatch(changedFiles, config, dot)) {
+    if (!checkMatch(changedFiles, config, dot, commits)) {
       return false;
     }
   }
@@ -146,7 +164,8 @@ export function checkMatchConfigs(
 function checkMatch(
   changedFiles: string[],
   matchConfig: MatchConfig,
-  dot: boolean
+  dot: boolean,
+  commits: CommitInfo[]
 ): boolean {
   if (!Object.keys(matchConfig).length) {
     core.debug(`  no "any" or "all" patterns to check`);
@@ -154,13 +173,13 @@ function checkMatch(
   }
 
   if (matchConfig.all) {
-    if (!checkAll(matchConfig.all, changedFiles, dot)) {
+    if (!checkAll(matchConfig.all, changedFiles, dot, commits)) {
       return false;
     }
   }
 
   if (matchConfig.any) {
-    if (!checkAny(matchConfig.any, changedFiles, dot)) {
+    if (!checkAny(matchConfig.any, changedFiles, dot, commits)) {
       return false;
     }
   }
@@ -172,7 +191,8 @@ function checkMatch(
 export function checkAny(
   matchConfigs: BaseMatchConfig[],
   changedFiles: string[],
-  dot: boolean
+  dot: boolean,
+  commits: CommitInfo[] = []
 ): boolean {
   core.debug(`  checking "any" patterns`);
   if (
@@ -204,6 +224,27 @@ export function checkAny(
         return true;
       }
     }
+
+    if (matchConfig.commitMessage) {
+      if (checkAnyCommitMessage(commits, matchConfig.commitMessage)) {
+        core.debug(`  "any" patterns matched`);
+        return true;
+      }
+    }
+
+    if (matchConfig.commitAuthor) {
+      if (checkAnyCommitAuthor(commits, matchConfig.commitAuthor)) {
+        core.debug(`  "any" patterns matched`);
+        return true;
+      }
+    }
+
+    if (matchConfig.commitCount) {
+      if (checkAnyCommitCount(commits.length, matchConfig.commitCount)) {
+        core.debug(`  "any" patterns matched`);
+        return true;
+      }
+    }
   }
 
   core.debug(`  "any" patterns did not match any configs`);
@@ -214,7 +255,8 @@ export function checkAny(
 export function checkAll(
   matchConfigs: BaseMatchConfig[],
   changedFiles: string[],
-  dot: boolean
+  dot: boolean,
+  commits: CommitInfo[] = []
 ): boolean {
   core.debug(`  checking "all" patterns`);
   if (
@@ -247,6 +289,27 @@ export function checkAll(
 
     if (matchConfig.headBranch) {
       if (!checkAllBranch(matchConfig.headBranch, 'head')) {
+        core.debug(`  "all" patterns did not match`);
+        return false;
+      }
+    }
+
+    if (matchConfig.commitMessage) {
+      if (!checkAllCommitMessage(commits, matchConfig.commitMessage)) {
+        core.debug(`  "all" patterns did not match`);
+        return false;
+      }
+    }
+
+    if (matchConfig.commitAuthor) {
+      if (!checkAllCommitAuthor(commits, matchConfig.commitAuthor)) {
+        core.debug(`  "all" patterns did not match`);
+        return false;
+      }
+    }
+
+    if (matchConfig.commitCount) {
+      if (!checkAllCommitCount(commits.length, matchConfig.commitCount)) {
         core.debug(`  "all" patterns did not match`);
         return false;
       }

@@ -127,6 +127,7 @@ exports.getPullRequests = getPullRequests;
 const core = __importStar(__nccwpck_require__(7484));
 const github = __importStar(__nccwpck_require__(3228));
 const get_changed_files_1 = __nccwpck_require__(7132);
+const get_commits_1 = __nccwpck_require__(8476);
 function getPullRequests(client, prNumbers) {
     return __asyncGenerator(this, arguments, function* getPullRequests_1() {
         for (const prNumber of prNumbers) {
@@ -150,14 +151,93 @@ function getPullRequests(client, prNumbers) {
                 core.warning(`Pull request #${prNumber} has no changed files, skipping`);
                 continue;
             }
+            core.debug(`fetching commits for pr #${prNumber}`);
+            const commits = yield __await((0, get_commits_1.getCommits)(client, prNumber));
             yield yield __await({
                 data: prData,
                 number: prNumber,
-                changedFiles
+                changedFiles,
+                commits
             });
         }
     });
 }
+
+
+/***/ }),
+
+/***/ 8476:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.getCommits = void 0;
+const core = __importStar(__nccwpck_require__(7484));
+const github = __importStar(__nccwpck_require__(3228));
+const getCommits = (client, prNumber) => __awaiter(void 0, void 0, void 0, function* () {
+    const listCommitsOptions = client.rest.pulls.listCommits.endpoint.merge({
+        owner: github.context.repo.owner,
+        repo: github.context.repo.repo,
+        pull_number: prNumber
+    });
+    const listCommitsResponse = yield client.paginate(listCommitsOptions);
+    const commits = listCommitsResponse.map((c) => {
+        var _a, _b, _c, _d;
+        return ({
+            message: ((_a = c.commit) === null || _a === void 0 ? void 0 : _a.message) || '',
+            author: ((_c = (_b = c.commit) === null || _b === void 0 ? void 0 : _b.author) === null || _c === void 0 ? void 0 : _c.name) || ((_d = c.author) === null || _d === void 0 ? void 0 : _d.login) || ''
+        });
+    });
+    core.debug('found commits:');
+    for (const commit of commits) {
+        core.debug(`  "${commit.message}" by ${commit.author}`);
+    }
+    return commits;
+});
+exports.getCommits = getCommits;
 
 
 /***/ }),
@@ -277,7 +357,15 @@ const fs_1 = __importDefault(__nccwpck_require__(9896));
 const get_content_1 = __nccwpck_require__(6519);
 const changedFiles_1 = __nccwpck_require__(5145);
 const branch_1 = __nccwpck_require__(2234);
-const ALLOWED_CONFIG_KEYS = ['changed-files', 'head-branch', 'base-branch'];
+const commit_1 = __nccwpck_require__(4071);
+const ALLOWED_CONFIG_KEYS = [
+    'changed-files',
+    'head-branch',
+    'base-branch',
+    'commit-message',
+    'commit-author',
+    'commit-count'
+];
 const getLabelConfigs = (client, configurationPath) => Promise.resolve()
     .then(() => {
     if (!fs_1.default.existsSync(configurationPath)) {
@@ -352,7 +440,8 @@ function getLabelConfigMapFromObject(configObject) {
 function toMatchConfig(config) {
     const changedFilesConfig = (0, changedFiles_1.toChangedFilesMatchConfig)(config);
     const branchConfig = (0, branch_1.toBranchMatchConfig)(config);
-    return Object.assign(Object.assign({}, changedFilesConfig), branchConfig);
+    const commitConfig = (0, commit_1.toCommitMatchConfig)(config);
+    return Object.assign(Object.assign(Object.assign({}, changedFilesConfig), branchConfig), commitConfig);
 }
 
 
@@ -380,6 +469,7 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 __exportStar(__nccwpck_require__(7132), exports);
 __exportStar(__nccwpck_require__(3583), exports);
+__exportStar(__nccwpck_require__(8476), exports);
 __exportStar(__nccwpck_require__(6519), exports);
 __exportStar(__nccwpck_require__(8554), exports);
 __exportStar(__nccwpck_require__(647), exports);
@@ -826,6 +916,170 @@ function checkIfAllGlobsMatchAllFiles(changedFiles, globs, dot) {
 
 /***/ }),
 
+/***/ 4071:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.toCommitMatchConfig = toCommitMatchConfig;
+exports.checkAnyCommitMessage = checkAnyCommitMessage;
+exports.checkAllCommitMessage = checkAllCommitMessage;
+exports.checkAnyCommitAuthor = checkAnyCommitAuthor;
+exports.checkAllCommitAuthor = checkAllCommitAuthor;
+exports.checkAnyCommitCount = checkAnyCommitCount;
+exports.checkAllCommitCount = checkAllCommitCount;
+const core = __importStar(__nccwpck_require__(7484));
+function toCommitMatchConfig(config) {
+    const commitConfig = {};
+    if (config['commit-message']) {
+        commitConfig.commitMessage =
+            typeof config['commit-message'] === 'string'
+                ? [config['commit-message']]
+                : config['commit-message'];
+    }
+    if (config['commit-author']) {
+        commitConfig.commitAuthor =
+            typeof config['commit-author'] === 'string'
+                ? [config['commit-author']]
+                : config['commit-author'];
+    }
+    if (config['commit-count']) {
+        const countConfigs = Array.isArray(config['commit-count'])
+            ? config['commit-count']
+            : [config['commit-count']];
+        commitConfig.commitCount = countConfigs.map((cc) => ({
+            minCount: cc['min-count'],
+            maxCount: cc['max-count']
+        }));
+    }
+    return commitConfig;
+}
+function checkAnyCommitMessage(commits, patterns) {
+    core.debug(`   checking "commit-message" patterns`);
+    const matchers = patterns.map(p => new RegExp(p));
+    for (const matcher of matchers) {
+        for (const commit of commits) {
+            core.debug(`    - ${matcher} against "${commit.message}"`);
+            if (matcher.test(commit.message)) {
+                core.debug(`    "commit-message" pattern matched`);
+                return true;
+            }
+        }
+    }
+    core.debug(`   "commit-message" patterns did not match`);
+    return false;
+}
+function checkAllCommitMessage(commits, patterns) {
+    core.debug(`   checking "commit-message" patterns (all)`);
+    const matchers = patterns.map(p => new RegExp(p));
+    for (const matcher of matchers) {
+        const found = commits.some(commit => {
+            core.debug(`    - ${matcher} against "${commit.message}"`);
+            return matcher.test(commit.message);
+        });
+        if (!found) {
+            core.debug(`    "commit-message" pattern ${matcher} did not match any commit`);
+            return false;
+        }
+    }
+    core.debug(`   "commit-message" patterns all matched`);
+    return true;
+}
+function checkAnyCommitAuthor(commits, patterns) {
+    core.debug(`   checking "commit-author" patterns`);
+    const matchers = patterns.map(p => new RegExp(p));
+    for (const matcher of matchers) {
+        for (const commit of commits) {
+            core.debug(`    - ${matcher} against "${commit.author}"`);
+            if (matcher.test(commit.author)) {
+                core.debug(`    "commit-author" pattern matched`);
+                return true;
+            }
+        }
+    }
+    core.debug(`   "commit-author" patterns did not match`);
+    return false;
+}
+function checkAllCommitAuthor(commits, patterns) {
+    core.debug(`   checking "commit-author" patterns (all)`);
+    const matchers = patterns.map(p => new RegExp(p));
+    for (const matcher of matchers) {
+        const found = commits.some(commit => {
+            core.debug(`    - ${matcher} against "${commit.author}"`);
+            return matcher.test(commit.author);
+        });
+        if (!found) {
+            core.debug(`    "commit-author" pattern ${matcher} did not match any commit`);
+            return false;
+        }
+    }
+    core.debug(`   "commit-author" patterns all matched`);
+    return true;
+}
+function checkAnyCommitCount(commitCount, configs) {
+    core.debug(`   checking "commit-count" (count: ${commitCount})`);
+    for (const config of configs) {
+        const aboveMin = config.minCount === undefined || commitCount >= config.minCount;
+        const belowMax = config.maxCount === undefined || commitCount <= config.maxCount;
+        if (aboveMin && belowMax) {
+            core.debug(`   "commit-count" matched`);
+            return true;
+        }
+    }
+    core.debug(`   "commit-count" did not match`);
+    return false;
+}
+function checkAllCommitCount(commitCount, configs) {
+    core.debug(`   checking "commit-count" (all, count: ${commitCount})`);
+    for (const config of configs) {
+        const aboveMin = config.minCount === undefined || commitCount >= config.minCount;
+        const belowMax = config.maxCount === undefined || commitCount <= config.maxCount;
+        if (!aboveMin || !belowMax) {
+            core.debug(`   "commit-count" did not match`);
+            return false;
+        }
+    }
+    core.debug(`   "commit-count" all matched`);
+    return true;
+}
+
+
+/***/ }),
+
 /***/ 3865:
 /***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
@@ -1040,6 +1294,7 @@ const lodash_isequal_1 = __importDefault(__nccwpck_require__(9471));
 const get_inputs_1 = __nccwpck_require__(1219);
 const changedFiles_1 = __nccwpck_require__(5145);
 const branch_1 = __nccwpck_require__(2234);
+const commit_1 = __nccwpck_require__(4071);
 // GitHub Issues cannot have more than 100 labels
 const GITHUB_MAX_LABELS = 100;
 const run = () => labeler().catch(error => {
@@ -1067,7 +1322,7 @@ function labeler() {
                 const allLabels = new Set(preexistingLabels);
                 for (const [label, configs] of labelConfigs.entries()) {
                     core.debug(`processing ${label}`);
-                    if (checkMatchConfigs(pullRequest.changedFiles, configs, dot)) {
+                    if (checkMatchConfigs(pullRequest.changedFiles, configs, dot, pullRequest.commits)) {
                         allLabels.add(label);
                     }
                     else if (syncLabels) {
@@ -1131,34 +1386,34 @@ function labeler() {
         }
     });
 }
-function checkMatchConfigs(changedFiles, matchConfigs, dot) {
+function checkMatchConfigs(changedFiles, matchConfigs, dot, commits = []) {
     for (const config of matchConfigs) {
         core.debug(` checking config ${JSON.stringify(config)}`);
-        if (!checkMatch(changedFiles, config, dot)) {
+        if (!checkMatch(changedFiles, config, dot, commits)) {
             return false;
         }
     }
     return true;
 }
-function checkMatch(changedFiles, matchConfig, dot) {
+function checkMatch(changedFiles, matchConfig, dot, commits) {
     if (!Object.keys(matchConfig).length) {
         core.debug(`  no "any" or "all" patterns to check`);
         return false;
     }
     if (matchConfig.all) {
-        if (!checkAll(matchConfig.all, changedFiles, dot)) {
+        if (!checkAll(matchConfig.all, changedFiles, dot, commits)) {
             return false;
         }
     }
     if (matchConfig.any) {
-        if (!checkAny(matchConfig.any, changedFiles, dot)) {
+        if (!checkAny(matchConfig.any, changedFiles, dot, commits)) {
             return false;
         }
     }
     return true;
 }
 // equivalent to "Array.some()" but expanded for debugging and clarity
-function checkAny(matchConfigs, changedFiles, dot) {
+function checkAny(matchConfigs, changedFiles, dot, commits = []) {
     core.debug(`  checking "any" patterns`);
     if (!matchConfigs.length ||
         !matchConfigs.some(configOption => Object.keys(configOption).length)) {
@@ -1184,12 +1439,30 @@ function checkAny(matchConfigs, changedFiles, dot) {
                 return true;
             }
         }
+        if (matchConfig.commitMessage) {
+            if ((0, commit_1.checkAnyCommitMessage)(commits, matchConfig.commitMessage)) {
+                core.debug(`  "any" patterns matched`);
+                return true;
+            }
+        }
+        if (matchConfig.commitAuthor) {
+            if ((0, commit_1.checkAnyCommitAuthor)(commits, matchConfig.commitAuthor)) {
+                core.debug(`  "any" patterns matched`);
+                return true;
+            }
+        }
+        if (matchConfig.commitCount) {
+            if ((0, commit_1.checkAnyCommitCount)(commits.length, matchConfig.commitCount)) {
+                core.debug(`  "any" patterns matched`);
+                return true;
+            }
+        }
     }
     core.debug(`  "any" patterns did not match any configs`);
     return false;
 }
 // equivalent to "Array.every()" but expanded for debugging and clarity
-function checkAll(matchConfigs, changedFiles, dot) {
+function checkAll(matchConfigs, changedFiles, dot, commits = []) {
     core.debug(`  checking "all" patterns`);
     if (!matchConfigs.length ||
         !matchConfigs.some(configOption => Object.keys(configOption).length)) {
@@ -1215,6 +1488,24 @@ function checkAll(matchConfigs, changedFiles, dot) {
         }
         if (matchConfig.headBranch) {
             if (!(0, branch_1.checkAllBranch)(matchConfig.headBranch, 'head')) {
+                core.debug(`  "all" patterns did not match`);
+                return false;
+            }
+        }
+        if (matchConfig.commitMessage) {
+            if (!(0, commit_1.checkAllCommitMessage)(commits, matchConfig.commitMessage)) {
+                core.debug(`  "all" patterns did not match`);
+                return false;
+            }
+        }
+        if (matchConfig.commitAuthor) {
+            if (!(0, commit_1.checkAllCommitAuthor)(commits, matchConfig.commitAuthor)) {
+                core.debug(`  "all" patterns did not match`);
+                return false;
+            }
+        }
+        if (matchConfig.commitCount) {
+            if (!(0, commit_1.checkAllCommitCount)(commits.length, matchConfig.commitCount)) {
                 core.debug(`  "all" patterns did not match`);
                 return false;
             }
